@@ -13,36 +13,37 @@ import time
 import pandas as pd
 import os
 import numpy as np
+import logging
+from datetime import datetime
 
+# Configure logging
+log_filename = datetime.now().strftime('script_log_%Y-%m-%d_%H-%M-%S.txt')
+#logging.basicConfig(filename=log_filename, level=logging.INFO)
+logging.basicConfig(filename=log_filename, filemode='w', level=logging.INFO)
 
-# Get the current script's directory
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Construct the path to the 'CIP' directory, which is the parent of the 'scripts' directory
-cip_dir = os.path.join(script_dir, '..', '..')
-
-# Now, construct the path to the 'raw_data' directory within the 'CIP/data' directory
-raw_data_dir = os.path.join(cip_dir, 'data', 'raw_data')
-
-# Finally, create the full path to the 'indexes_to_scrap.xlsx' file
-excel_file_path = os.path.join(raw_data_dir, 'indexes_to_scrap.xlsx')
+# Log when the script starts
+logging.info('Script started' + str(datetime.now()))
 
 # Reading the Excel file into a DataFrame
-df_excel = pd.read_excel(excel_file_path)
+df_excel = pd.read_excel('/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/raw_data/indexes_to_scrap.xlsx')
+
+#For testing purpose I am only loading 3 shares of the list
+#df_excel = df_excel.head(1)
 
 # Concatenating the 'ISIN' and 'TRADING LOCATION' columns into a new column in the DataFrame
-df_excel['ISIN-MIC'] = df_excel['ISIN'] + '-' + df_excel['TRADING LOCATION']
-
-print(df_excel.head())
-
+ISIN_MIC = df_excel['ISIN'] + '-' + df_excel['MIC']
 
 #for windows
 driver = webdriver.Chrome()
 
 url = 'https://live.euronext.com/en/product/equities/'
-indixes_list = ['FR0000121014-XPAR', 'FR0000052292-ETLX', 'IT0004056880-MTAA']
 
-for i in indixes_list:
+headers = ["Name","Currency", "Market Cap", "CDP", "FTSE4Good", "MSCI ESG Ratings", "Moody's ESG Solution", "Sustainalytics", "Carbon footprint (total GHG emissions / enterprise value)",
+      "Share of women in total workforce", "Rate of resignation", "Type", "Sub type", "Market", "ISIN Code", "Industry","SuperSector", "Sector", "Subsector"]
+
+df = pd.DataFrame(columns=headers)
+
+for i in ISIN_MIC.tolist():
     comple_url = url + i
     #//Öffnet die webseite
     #ISIN FR0000121014
@@ -59,29 +60,25 @@ for i in indixes_list:
     #search.send_keys("FR0000121014")
     #search.send_keys(Keys.RETURN)
 
-
-
     #Wants to read the Quotes page and waits max. 10 seconds to load
     #Loads currency & market cap into a dictionary.
-    share = {"ISIN": i}
+    share = []
 
     try:
         element_header_main_wrapper = WebDriverWait(driver,10).until( #waits max 10 until the page is loaded
             EC.presence_of_element_located((By.ID, "main-wrapper")))
 
-        element_header_instrument_name = element_header_main_wrapper.find_element(By.ID,"header-instrument-name")
-        print("Instrument name is:",element_header_instrument_name.text)
+        share.append(["Name",element_header_main_wrapper.find_element(By.ID,"header-instrument-name").text])
+
 
         element_table_responsive = element_header_main_wrapper.find_element(By.CLASS_NAME, "table.border-top.border-bottom-0.mb-2.text-white")
         for element in element_table_responsive.find_elements(By.CSS_SELECTOR,"tr"):
             td_element_list = element.find_elements(By.CSS_SELECTOR, "td")
             match td_element_list[0].text:
                 case "Currency":
-                    share.update({"Currency": td_element_list[1].text})
-                    print("currency added with value:",td_element_list[1].text)
+                    share.append(["Currency", td_element_list[1].text])
                 case "Market Cap":
-                    share.update({"Market Cap": td_element_list[1].text})
-                    print("Market Cap added with value:", td_element_list[1].text)
+                    share.append(["Market Cap", td_element_list[1].text])
             continue
     except NoSuchElementException:
        print("Didn't find the element")
@@ -95,8 +92,6 @@ for i in indixes_list:
     esg_button.click()
     # print(driver.page_source)
     time.sleep(3)
-    esg_ratings = {"ISIN": "FR0000121014"}
-    esg_ratings_list = []
 
     # esg_ratings_block_description=driver.find_element(By.ID, "EsgRatingsBlockDescription")
     # print(esg_ratings_block_description.text)
@@ -114,14 +109,10 @@ for i in indixes_list:
             if field in esg_rating_fields:
                 # Extract the text from the first two cells for each required row
                 # Add the Ratings of the ESG Rating row to the dictionary
-                share.update({field: field, "Rating" : td_element_list[1].text.strip()})
+                share.append({field: field, "Rating" : td_element_list[1].text.strip()})
             elif field in other_esg_information:
-                esg_ratings_list.append([field, td_element_list[1].text.strip(),td_element_list[2].text.strip()])
-                esg_ratings.update({field: field, "Unit": td_element_list[1].text.strip(),"Rating": td_element_list[2].text.strip()})
+                share.append([field, td_element_list[2].text.strip() +' '+ td_element_list[1].text.strip()])
 
-    print(share)
-    print(esg_ratings)
-    print(esg_ratings_list)
 
     #go to page Characteristics
     try:
@@ -144,12 +135,37 @@ for i in indixes_list:
                 if field in characteristics:
                     # Extract the text from the first two cells for each required row
                     # Add the Ratings of the ESG Rating row to the dictionary
-                    characteristics_list.append([field, element_list[1].text.strip()])
-        print("character liste", characteristics_list)
+                    share.append([field, element_list[1].text.strip()])
     except:
         print("Unexpected error:", sys.exc_info())
+    finally:
+        print(share)
+
+    # Initialize a dictionary with all headers set to None
+    row_data = {header: None for header in headers}
+
+    # Fill the dictionary with the scraped data
+    for item in share:
+        if len(item) == 2:
+            key, value = item
+            if key in row_data:
+                row_data[key] = value
+        elif len(item) == 1:
+            # If there is only one element in the item, it means no value was scraped for that field
+            row_data[item[0]] = None
+
+    # Convert the row dictionary to a DataFrame and concatenate it to the main DataFrame
+    row_df = pd.DataFrame([row_data])
+    df = pd.concat([df, row_df], ignore_index=True)
+
+# Once you have the final DataFrame 'df' ready, you can save it to a CSV file as follows:
+csv_file_path = '/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/clean_data/scraped_shares_data.csv'  # You can change this to your preferred path
+df.to_csv(csv_file_path, mode='w', index=False)  # Set index=False to exclude the index from the CSV, existing files are overwritten
 
 
-    #selenium returns the first item which it find. Therefore look fore something that is uniquie.  search for first for id then name then class
+# Log when the script ends
+logging.info('Script ended' + str(datetime.now()))
 
 driver.quit()
+
+print(df)
