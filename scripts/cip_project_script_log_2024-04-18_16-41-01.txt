@@ -1,0 +1,3 @@
+INFO:root:Script started at 2024-04-18 16:41:01.337326
+INFO:root:Data saved to /home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/clean_data/scraped_shares_extendedESG_data2.csv
+INFO:root:Script ended at 2024-04-18 18:44:13.960406
