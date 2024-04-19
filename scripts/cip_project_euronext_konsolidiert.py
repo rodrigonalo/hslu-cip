@@ -153,7 +153,7 @@ def scrape_esg_information(driver, isin_mic):
 
         esg_rating_fields = ["CDP", "FTSE4Good", "MSCI ESG Ratings", "Moody's ESG Solution", "Sustainalytics"]
         other_esg_information = ["Carbon footprint (total GHG emissions / enterprise value)",
-                                 "Share of women in total workforce", "Rate of resignation"]
+                                 "Share of women in total workforce", "Rate of resignation","Share of women in management bodies","Gender pay gap", "Professional equality index", "Rate of employees with disabilities", "Average training hours per employee", "Board gender diversity (female board members / total board members)", "Number of female board members","Number of board members", "Total energy consumption", " Ratio of non-recycled waste"]
 
         for element in driver.find_elements(By.TAG_NAME, "tr"):
             td_element_list = element.find_elements(By.TAG_NAME, "td")
@@ -255,7 +255,7 @@ def main():
     driver = initialize_webdriver()
 
     try:
-        df_excel = read_excel_data('/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/raw_data/indexes_to_scrap_stage1.xlsx')
+        df_excel = read_excel_data('/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/clean_data/indexes_to_scrap_stage1.xlsx')
         # Concatenating the 'ISIN' and 'TRADING LOCATION' columns into a new column in the DataFrame
         #df_excel = df_excel.head(1)
 
@@ -264,7 +264,7 @@ def main():
         headers = ["Name", "Currency", "Market Cap", "CDP", "FTSE4Good", "MSCI ESG Ratings", "Moody's ESG Solution",
                    "Sustainalytics", "Carbon footprint (total GHG emissions / enterprise value)",
                    "Share of women in total workforce", "Rate of resignation", "Type", "Sub type", "Market",
-                   "ISIN Code", "Industry", "SuperSector", "Sector", "Subsector"]
+                   "ISIN Code", "Industry", "SuperSector", "Sector", "Subsector","Share of women in management bodies","Gender pay gap", "Professional equality index", "Rate of employees with disabilities", "Average training hours per employee", "Board gender diversity (female board members / total board members)", "Number of female board members","Number of board members", "Total energy consumption", " Ratio of non-recycled waste"]
 
         df = pd.DataFrame(columns=headers)
 
@@ -279,11 +279,10 @@ def main():
             row_df = load_data_in_df(all_info, headers)
             df = pd.concat([df, row_df], ignore_index=True)
 
-        save_to_csv(df, '/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/raw_data/scraped_shares_data2.csv')
+        save_to_csv(df, '/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/clean_data/scraped_shares_extendedESG_data2.csv')
     finally:
         driver.quit()
         logging.info('Script ended at ' + str(datetime.now()))
-        print(df)
 
 if __name__ == "__main__":
     main()
