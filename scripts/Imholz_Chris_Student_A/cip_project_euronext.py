@@ -3,7 +3,7 @@
 import sys
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException,TimeoutException, StaleElementReferenceException
 from selenium.webdriver.common.keys import Keys # used to send keys
 from selenium.webdriver.common.by import By # used to send keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,6 +16,10 @@ import numpy as np
 import logging
 from datetime import datetime
 
+# @TODO: DANONE does not have a ESG button, how to handle that?
+# @TODO: Name does not properly work to load.
+
+
 # Configure logging
 log_filename = datetime.now().strftime('script_log_%Y-%m-%d_%H-%M-%S.txt')
 #logging.basicConfig(filename=log_filename, level=logging.INFO)
@@ -25,7 +29,7 @@ logging.basicConfig(filename=log_filename, filemode='w', level=logging.INFO)
 logging.info('Script started' + str(datetime.now()))
 
 # Reading the Excel file into a DataFrame
-df_excel = pd.read_excel('/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/raw_data/indexes_to_scrap.xlsx')
+df_excel = pd.read_excel('/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/raw_data/indexes_to_scrap_stage1.xlsx')
 
 #For testing purpose I am only loading 3 shares of the list
 #df_excel = df_excel.head(1)
@@ -65,13 +69,17 @@ for i in ISIN_MIC.tolist():
     share = []
 
     try:
-        element_header_main_wrapper = WebDriverWait(driver,10).until( #waits max 10 until the page is loaded
+        element_header_main_wrapper = WebDriverWait(driver,60).until( #waits max 10 until the page is loaded
             EC.presence_of_element_located((By.ID, "main-wrapper")))
 
-        share.append(["Name",element_header_main_wrapper.find_element(By.ID,"header-instrument-name").text])
+        element_header_name = WebDriverWait(driver,60).until( #waits max 10 until the page is loaded
+            EC.presence_of_element_located((By.ID, "header-instrument-name")))
 
+        share.append(["Name",element_header_name.text])
 
-        element_table_responsive = element_header_main_wrapper.find_element(By.CLASS_NAME, "table.border-top.border-bottom-0.mb-2.text-white")
+        #share.append(["Name",element_header_main_wrapper.find_element(By.ID,"header-instrument-name").text])
+
+        element_table_responsive = element_header_main_wrapper.find_element(By.CLASS_NAME, "table-responsive")
         for element in element_table_responsive.find_elements(By.CSS_SELECTOR,"tr"):
             td_element_list = element.find_elements(By.CSS_SELECTOR, "td")
             match td_element_list[0].text:
@@ -80,43 +88,47 @@ for i in ISIN_MIC.tolist():
                 case "Market Cap":
                     share.append(["Market Cap", td_element_list[1].text])
             continue
-    except NoSuchElementException:
-       print("Didn't find the element")
+
+    except:
+       print("Didn't find the element in quotes:", comple_url)
        print(sys.exc_info()[0])
-    #finally:
-        #driver.quit()  # closes the browser at the end. Doesn't matter if successful or not
 
-    #go to page ESG
-    esg_button = WebDriverWait(driver,10).until( #waits max 10seconds until the page is loaded
-             EC.presence_of_element_located((By.CLASS_NAME, "nav-item.nav-link.esg-nav-link")))
-    esg_button.click()
-    # print(driver.page_source)
-    time.sleep(3)
+    try:
+        #go to page ESG
+        esg_button = WebDriverWait(driver,10).until( #waits max 10seconds until the page is loaded
+                 EC.presence_of_element_located((By.CLASS_NAME, "nav-item.nav-link.esg-nav-link")))
+        esg_button.click()
+        # print(driver.page_source)
+        time.sleep(3)
 
-    # esg_ratings_block_description=driver.find_element(By.ID, "EsgRatingsBlockDescription")
-    # print(esg_ratings_block_description.text)
-    # your code to find and interact with the element
+        # esg_ratings_block_description=driver.find_element(By.ID, "EsgRatingsBlockDescription")
+        # print(esg_ratings_block_description.text)
+        # your code to find and interact with the element
 
-    esg_rating_fields = ["CDP", "FTSE4Good", "MSCI ESG Ratings", "Moody's ESG Solution", "Sustainalytics"]
-    other_esg_information = ["Carbon footprint (total GHG emissions / enterprise value)", "Share of women in total workforce", "Rate of resignation"]
+        esg_rating_fields = ["CDP", "FTSE4Good", "MSCI ESG Ratings", "Moody's ESG Solution", "Sustainalytics"]
+        other_esg_information = ["Carbon footprint (total GHG emissions / enterprise value)", "Share of women in total workforce", "Rate of resignation"]
 
 
-    for element in driver.find_elements(By.TAG_NAME, "tr"):
-        td_element_list = element.find_elements(By.TAG_NAME, "td")
+        for element in driver.find_elements(By.TAG_NAME, "tr"):
+            td_element_list = element.find_elements(By.TAG_NAME, "td")
 
-        if td_element_list: # check if there is an element
-            field = td_element_list[0].text.strip()
-            if field in esg_rating_fields:
-                # Extract the text from the first two cells for each required row
-                # Add the Ratings of the ESG Rating row to the dictionary
-                share.append({field: field, "Rating" : td_element_list[1].text.strip()})
-            elif field in other_esg_information:
-                share.append([field, td_element_list[2].text.strip() +' '+ td_element_list[1].text.strip()])
+            if td_element_list: # check if there is an element
+                field = td_element_list[0].text.strip()
+                if field in esg_rating_fields:
+                    # Extract the text from the first two cells for each required row
+                    # Add the Ratings of the ESG Rating row to the dictionary
+                    share.append([field, td_element_list[1].text.strip()])
+                elif field in other_esg_information:
+                    share.append([field, td_element_list[2].text.strip() +' '+ td_element_list[1].text.strip()]) # Values that do not contain an entry were deliberately taken into account. As a result, these are adjusted in data cleaning.
+    except:
+        print("ESG Page not found unexpected error from ISIN ", ISIN_MIC)
+        print(sys.exc_info()[0])
+
 
 
     #go to page Characteristics
     try:
-        character_button = WebDriverWait(driver, 10).until(
+        character_button = WebDriverWait(driver, 15).until(
             EC.element_to_be_clickable((By.LINK_TEXT, "CHARACTERISTICS"))
         )
 
@@ -137,7 +149,8 @@ for i in ISIN_MIC.tolist():
                     # Add the Ratings of the ESG Rating row to the dictionary
                     share.append([field, element_list[1].text.strip()])
     except:
-        print("Unexpected error:", sys.exc_info())
+        print("Characteristics Page not found from ISIN ", ISIN_MIC ,": ", sys.exc_info())
+
     finally:
         print(share)
 
@@ -160,7 +173,7 @@ for i in ISIN_MIC.tolist():
 
 # Once you have the final DataFrame 'df' ready, you can save it to a CSV file as follows:
 csv_file_path = '/home/student/Cloud/Owncloud/SyncVM/CIP/hslu-cip/data/clean_data/scraped_shares_data.csv'  # You can change this to your preferred path
-df.to_csv(csv_file_path, mode='w', index=False)  # Set index=False to exclude the index from the CSV, existing files are overwritten
+df.to_csv(csv_file_path, mode='w',sep=";", index=False)  # Set index=False to exclude the index from the CSV, existing files are overwritten
 
 
 # Log when the script ends
